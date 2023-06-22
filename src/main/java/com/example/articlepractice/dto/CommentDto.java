@@ -10,8 +10,7 @@ public class CommentDto {
     private String writer;
     private String content;
 
-    // 정적 팩토리 패턴
-    public static CommentDto fromEntity(CommentEntity entity) {
+    public static CommentDto fromEntity(CommentEntity entity){
         CommentDto dto = new CommentDto();
         dto.setId(entity.getId());
         dto.setArticleId(entity.getArticleId());

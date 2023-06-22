@@ -1,8 +1,13 @@
 package com.example.articlepractice;
 
+
 import com.example.articlepractice.dto.ArticleDto;
 import com.example.articlepractice.entity.ArticleEntity;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -14,31 +19,30 @@ import java.util.Optional;
 @Service
 @RequiredArgsConstructor
 public class ArticleService {
-    //JPA를 통해 자동으로 DB와 연결되는 ArticleRepository이다.
     private final ArticleRepository repository;
 
-    //Article을 만들어서 DB에 저장한 후, 해당되는 Dto를 만들어서 리턴합니다.
     public ArticleDto createArticle(ArticleDto dto) {
         ArticleEntity newArticle = new ArticleEntity();
         newArticle.setTitle(dto.getTitle());
         newArticle.setContent(dto.getContent());
         newArticle.setWriter(dto.getWriter());
-
         return ArticleDto.fromEntity(repository.save(newArticle));
     }
 
-    //특정 아이디를 가진 Article을 DB에서 읽어서 Dto로 만들어서 리턴합니다.
     public ArticleDto readArticle(Long id) {
-        Optional<ArticleEntity> entity = repository.findById(id);
-        if (entity.isPresent()){
-           // DTO로 전환후 반환
-            return ArticleDto.fromEntity(entity.get());
-            //아니라면 404
-        }else throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+        Optional<ArticleEntity> optionalArticle
+                = repository.findById(id);
+        // optional 안에 Aritcle이 들어있으면
+        if (optionalArticle.isPresent())
+            // DTO로 전환 후 반환
+            return ArticleDto.fromEntity(optionalArticle.get());
+            // 아니면 404
+        else throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+
     }
 
-    //모든 Article을 DB에서 읽어서 Dto로 만들어서 리턴합니다.
     public List<ArticleDto> readArticleAll() {
+//        throw new ResponseStatusException(HttpStatus.NOT_IMPLEMENTED);
         List<ArticleDto> articleList = new ArrayList<>();
         for (ArticleEntity entity: repository.findAll()) {
             articleList.add(ArticleDto.fromEntity(entity));
@@ -46,24 +50,85 @@ public class ArticleService {
         return articleList;
     }
 
-    //특정 Article을 dto에 적힌 내용대로 수정한 후 db에 반영합니다. 그 후, 수정된 article의 내용을 dto로 만들어서 리턴합니다.
     public ArticleDto updateArticle(Long id, ArticleDto dto) {
-        Optional<ArticleEntity> entityList = repository.findById(id);
-        if (entityList.isPresent()) {
-            ArticleEntity entity = entityList.get();
-            entity.setTitle(dto.getTitle());
-            entity.setWriter(dto.getWriter());
-            entity.setContent(dto.getContent());
-            repository.save(entity);
-            return ArticleDto.fromEntity(entityList.get());
-        }else   throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+        // UPDATE
+        // ArticleEntity 받아오기
+        Optional<ArticleEntity> optionalArticle
+                = repository.findById(id);
+        // ArticleEntity 가 있을때
+        if (optionalArticle.isPresent()) {
+            // 전달받은 dto 기준으로 수정
+            ArticleEntity article = optionalArticle.get();
+            article.setWriter(dto.getWriter());
+            article.setTitle(dto.getTitle());
+            article.setContent(dto.getContent());
+            repository.save(article);
+            return ArticleDto.fromEntity(article);
+        }
+        // 없다면 404
+        else throw new ResponseStatusException(HttpStatus.NOT_FOUND);
     }
 
-    // 특정 id를 가진 Article을 DB에서 삭제합니다.
     public void deleteArticle(Long id) {
-        Optional<ArticleEntity> entity = repository.findById(id);
-        if (repository.existsById(id)){
+        if (repository.existsById(id))
             repository.deleteById(id);
-        }else throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+        else throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+
+    }
+
+//    public List<ArticleDto> readArticlePaged() {
+//        // JPA Query Method 방식 (비추)
+//        List<ArticleDto> articleDtoList =
+//                new ArrayList<>();
+//        for (ArticleEntity entity:
+//                repository.findTop20ByOrderByIdDesc()) {
+//            articleDtoList.add(ArticleDto.fromEntity(entity));
+//        }
+//
+//        return articleDtoList;
+//    }
+
+//    public List<ArticleDto> readArticlePaged() {
+//        // PagingAndSortingRepository 메소드에 전달하는 용도
+//        // 조회하고 싶은 페이지의 정보를 담는 객체
+//        // 20개씩 데이터를 나눌때 0번 페이지를 달라고 요청하는 Pageable
+//        Pageable pageable = PageRequest.of(
+//                0, 20, Sort.by("id").descending());
+//        Page<ArticleEntity> articleEntityPage
+//                = repository.findAll(pageable);
+//
+//        List<ArticleDto> articleDtoList = new ArrayList<>();
+//        for (ArticleEntity entity: articleEntityPage) {
+//            articleDtoList.add(ArticleDto.fromEntity(entity));
+//        }
+//        return articleDtoList;
+//    }
+
+    public Page<ArticleDto> readArticlePaged(
+            Integer pageNumber, Integer pageSize
+    ) {
+        // PagingAndSortingRepository 메소드에 전달하는 용도
+        // 조회하고 싶은 페이지의 정보를 담는 객체
+        // 20개씩 데이터를 나눌때 0번 페이지를 달라고 요청하는 Pageable
+        Pageable pageable = PageRequest.of(
+                pageNumber, pageSize, Sort.by("id").descending());
+        Page<ArticleEntity> articleEntityPage
+                = repository.findAll(pageable);
+        // map: 전달받은 함수를 각 원소에 인자로 전달한 결과를
+        // 다시 모아서 Stream으로
+        // Page.map: 전달받은 함수를 각 원소에 인자로 전달한 결과를
+        // 다시 모아서 Page로
+        Page<ArticleDto> articleDtoPage
+                = articleEntityPage.map(ArticleDto::fromEntity);
+        return articleDtoPage;
+    }
+
+    public Page<ArticleDto> search(
+            String query, Integer pageNumber
+    ) {
+        Pageable pageable = PageRequest.of(
+                pageNumber, 20, Sort.by("id").descending());
+        return repository.findAllByTitleContains(query, pageable)
+                .map(ArticleDto::fromEntity);
     }
 }
